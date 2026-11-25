@@ -1,0 +1,5 @@
+.strata/
+__pycache__/
+*.pyc
+tests/out/
+node_modules/
