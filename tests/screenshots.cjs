@@ -94,7 +94,9 @@ async function yawFacing(page, apId, offset = 0) {
 
     yaw = await yawFacing(page, "site-one", 1.1);
     await aim(page, {at: "demo-lead-a/demo-a5", dist: 15, yaw: yaw + Math.PI, pitch: 0.75});
+    await page.evaluate(() => window.__atc.select("demo-lead-a"));  // shows its subagents' labels
     await shot(page, "closeup-resting.png", 26);
+    await page.evaluate(() => window.__atc.select(null));
 
     yaw = await yawFacing(page, "engine", 0.6);
     await aim(page, {at: "ap:engine", a: 0, dist: 20, yaw: yaw, pitch: 0.55});
@@ -114,23 +116,23 @@ async function yawFacing(page, apId, offset = 0) {
     fs.mkdirSync(frames);
     await page.setViewportSize({width: 720, height: 420});
     yaw = await yawFacing(page, "plugin-site", 0.8);
-    await aim(page, {at: "ap:plugin-site", a: 2, dist: 34, yaw: yaw + Math.PI, pitch: 0.5});
+    await aim(page, {at: "ap:plugin-site", a: 7, dist: 21, yaw: yaw + Math.PI, pitch: 0.6});
     await advance(page, 40);
-    const N = 60;
+    const N = 54;
     for (let i = 0; i < N; i++) {
-      const t = 40 + i / 12;
+      const t = 40 + i / 11;
       await page.evaluate((t) => window.__atc.kit.drive(t), t);
       await page.screenshot({path: path.join(frames, String(i).padStart(3, "0") + ".png"), timeout: 120000});
     }
-    page._t = 40 + N / 12;
+    page._t = 40 + N / 11;
     const py = spawnSync("python3", ["-c", `
 import sys, glob
 from PIL import Image
 fs = sorted(glob.glob(sys.argv[1] + "/*.png"))
 ims = [Image.open(f).convert("RGB") for f in fs]
 pal = ims[len(ims)//2].quantize(colors=128, method=Image.MEDIANCUT)
-q = [im.quantize(palette=pal, dither=Image.FLOYDSTEINBERG) for im in ims]
-q[0].save(sys.argv[2], save_all=True, append_images=q[1:], duration=83, loop=0, optimize=True)
+q = [im.quantize(palette=pal, dither=Image.NONE) for im in ims]
+q[0].save(sys.argv[2], save_all=True, append_images=q[1:], duration=91, loop=0, optimize=True)
 `, frames, path.join(MEDIA, "motion.gif")], {stdio: "inherit"});
     if (py.status !== 0) throw new Error("GIF assembly failed");
     fs.rmSync(frames, {recursive: true, force: true});
@@ -144,7 +146,7 @@ q[0].save(sys.argv[2], save_all=True, append_images=q[1:], duration=83, loop=0, 
     const phone = await open(browser, srv.base, {viewport: {width: 390, height: 844}, deviceScaleFactor: 3, isMobile: true, hasTouch: true});
     await advance(phone.page, 10);
     await phone.page.evaluate(() => window.__atc.select("demo-waiting"));
-    await aim(phone.page, {dist: 46, yaw: 2.4, pitch: 0.55, dy: 5, dz: 6});
+    await aim(phone.page, {at: "demo-waiting", dist: 34, yaw: 2.4, pitch: 0.42});
     await shot(phone.page, "phone.png", 12);
     await phone.ctx.close();
     }

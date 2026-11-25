@@ -160,7 +160,7 @@ class Atc {
 
   routePoint(s, u) {
     const ap = s.ap, spread = (s.j - (s.m - 1) / 2) * 3.4;
-    const S = ap.P(3.2, s.b), O = ap.P(13 + 2.6 * (s.j % 3), s.b + spread), Hh = 3 + 0.7 * s.j;
+    const S = ap.P(4.4, s.b + spread * 0.25), O = ap.P(13 + 2.6 * (s.j % 3), s.b + spread), Hh = 3 + 0.7 * s.j;
     const mid = {x: (S.x + O.x) / 2, z: (S.z + O.z) / 2};
     const out = u < 0.5, q = out ? u * 2 : (u - 0.5) * 2;
     const side = out ? 3 : -3;
@@ -336,7 +336,7 @@ function placeLabels() {
     const el = labelFor("a:" + a.id, cls);
     if (el.textContent !== txt) el.textContent = txt;
     const s = a.kind === "follower" ? 0.62 : 1.3;
-    const rank = sel || d.state === "waiting" ? 0 : (a.kind === "follower" ? 3 : 2);
+    const rank = sel || d.state === "waiting" ? 0 : (a.kind === "follower" ? (d.state === "active" ? 3 : 2) : 2);
     items.push({el, q: kit.project(a.disp.x, a.disp.y + 1.5 * s, a.disp.z), rank});
   }
   for (const [k, el] of labelEls) if (!el._used) { el.remove(); labelEls.delete(k); }
@@ -364,7 +364,8 @@ function renderPanel() {
   chip.textContent = (STATE_WORD[state] || state) + (d.stalled ? " · STALLED" : "");
   chip.className = "chip st-" + state + (d.stalled ? " st-stalled" : "");
   const act = (a.kind === "follower" && d.state !== "active") ? "none" : (d.action || "none");
-  $("p-action").textContent = (ACTION_ICON[act] || "") + " " + (ACTION_WORD[act] || act);
+  $("p-action").textContent = d.state === "waiting" ? "🛬 circling the tower until you answer"
+    : (ACTION_ICON[act] || "") + " " + (ACTION_WORD[act] || act);
   const rows = [];
   const add = (k, v) => { if (v != null && v !== "") rows.push([k, v]); };
   if (a.kind === "follower") {
