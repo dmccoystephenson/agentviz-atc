@@ -1,5 +1,5 @@
 """Serves the fixture feed next to web/ and checks the page, its assets and
-the feed. Run: python3 -m unittest discover -s tests"""
+the feed, and that the vendored kit matches its PINs. Stdlib only: python3 -m unittest discover -s tests"""
 import json
 import os
 import socket
@@ -10,9 +10,12 @@ import unittest
 import urllib.request
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PORT = int(os.environ.get("ATC_TEST_PORT", "8944"))
+PORT = int(os.environ.get("ATC_UNIT_PORT", "9108"))
 BASE = "http://127.0.0.1:%d" % PORT
-ASSETS = ["/", "/index.html", "/atc.js", "/atc-engine.js", "/atc-engine.wasm", "/strata-kit.js", "/strata-loader.js"]
+
+
+PAGE_SCRIPTS = ("strata-loader.js", "strata-kit.js", "agentviz-feed.js", "agentviz-screen.js", "agentviz-hud.js",
+                "agentviz-wire.js", "atc-field.js", "atc-frame.js", "page.js")
 
 
 def get(path):
@@ -20,18 +23,21 @@ def get(path):
         return r.status, r.headers.get("Content-Type", ""), r.read()
 
 
-class ServeFixture(unittest.TestCase):
+class ServeFixtureTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.proc = subprocess.Popen(
             [sys.executable, "-m", "vendor.agentfeed", "serve", "--web", "web", "--port", str(PORT), "--fixture"],
             cwd=REPO, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        for _ in range(100):
+        deadline = time.time() + 15
+        while time.time() < deadline:
             try:
-                socket.create_connection(("127.0.0.1", PORT), timeout=0.2).close()
-                break
+                socket.create_connection(("127.0.0.1", PORT), timeout=0.5).close()
+                return
             except OSError:
                 time.sleep(0.1)
+        cls.proc.kill()
+        raise RuntimeError("server did not start")
 
     @classmethod
     def tearDownClass(cls):
@@ -39,22 +45,26 @@ class ServeFixture(unittest.TestCase):
         cls.proc.wait(timeout=10)
 
     def test_page_and_assets(self):
-        for path in ASSETS:
-            status, ctype, body = get(path)
-            self.assertEqual(status, 200, path)
-            self.assertTrue(body, path)
-        self.assertIn("application/wasm", get("/atc-engine.wasm")[1])
-        page = get("/")[2].decode()
-        for script in ("strata-loader.js", "strata-kit.js", "atc.js"):
-            self.assertIn(script, page)
+        status, ctype, body = get("/")
+        self.assertEqual(status, 200)
+        self.assertIn("text/html", ctype)
+        html = body.decode()
+        for asset in PAGE_SCRIPTS + ("agentviz-hud.css",):
+            self.assertIn(asset, html)
+        for asset in PAGE_SCRIPTS + ("agentviz-hud.css", "atc-engine.js"):
+            status, ctype, body = get("/" + asset)
+            self.assertEqual(status, 200, asset)
+            self.assertGreater(len(body), 500, asset)
+        status, ctype, body = get("/atc-engine.wasm")
+        self.assertEqual(status, 200)
+        self.assertEqual(ctype, "application/wasm")
+        self.assertEqual(body[:4], b"\0asm")
 
-    def test_page_uses_engine_exports(self):
-        js = get("/atc.js")[2].decode()
-        engine = get("/atc-engine.js")[2].decode()
-        for name in ("_atc_set_airports", "_atc_update_airports", "_atc_set_planes", "_atc_set_lines",
-                     "_atc_set_waiting", "_atc_set_time"):
-            self.assertIn(name, js)
-            self.assertIn(name.lstrip("_"), engine)
+    def test_engine_exports_the_wire_setter(self):
+        _, _, body = get("/page.js")
+        self.assertIn("createAtcEngine", body.decode())
+        _, _, body = get("/atc-engine.js")
+        self.assertIn("_agentviz_frame", body.decode())
 
     def test_feed_parses(self):
         status, ctype, body = get("/api/agents")
@@ -62,15 +72,28 @@ class ServeFixture(unittest.TestCase):
         doc = json.loads(body)
         self.assertEqual(doc["version"], 1)
         self.assertTrue(doc["fixture"])
-        states = {s["state"] for s in doc["sessions"]}
-        self.assertTrue({"busy", "idle", "waiting", "offline"} <= states)
-        self.assertTrue(any(s["followers"] for s in doc["sessions"]))
-        self.assertEqual(json.loads(get("/api/agents?fixture=1")[2])["fixture"], True)
+        names = {s["name"]: s for s in doc["sessions"]}
+        self.assertEqual(names["Thistle"]["waitingReason"], "permission")
+        self.assertEqual(names["Juniper"]["waitingReason"], "question")
+        self.assertEqual(len(names["Otto"]["followers"]), 7)
+        self.assertTrue(any(p.get("toolCount") for p in doc["places"]))
+        for s in doc["sessions"]:
+            self.assertIn(s["state"], ("offline", "dim", "idle", "busy", "waiting"))
+            self.assertIn(s["action"], ("edit", "run", "read", "web", "delegate", "think", "other", "none"))
+            for f in s["followers"]:
+                self.assertIn(f["state"], ("active", "resting"))
 
-    def test_outside_web_is_404(self):
+    def test_no_escape_from_web(self):
         with self.assertRaises(urllib.error.HTTPError) as e:
             get("/../vendor/agentfeed/feed.py")
         self.assertEqual(e.exception.code, 404)
+
+
+class VendoredCopiesTest(unittest.TestCase):
+    def test_vendored_copies_match_their_pins(self):
+        result = subprocess.run([sys.executable, os.path.join(REPO, "vendor", "agentviz-kit", "check_vendor.py"), REPO],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == "__main__":

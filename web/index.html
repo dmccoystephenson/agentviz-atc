@@ -3,97 +3,56 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>agentviz · ATC</title>
+<title>Air traffic control</title>
 <link rel="icon" href="data:,">
+<link rel="stylesheet" href="agentviz-hud.css">
 <style>
-  :root { color-scheme: dark; --bg: #0b1016; --fg: #e6edf3; --panel: rgba(14, 20, 28, 0.9); --line: rgba(255,255,255,0.12);
-    --red: #ff4a3a; --amber: #ffb020; --green: #43e07a; }
-  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--fg);
-    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  /* ATC's theme for the kit's HUD (agentviz-hud.css): a night field, red for holding, amber for stalled. */
+  :root { color-scheme: dark; --bg: #0b1016; --av-fg: #e6edf3; --av-muted: #9aa7b6; --av-panel: rgba(14, 20, 28, 0.9);
+    --av-wait: #ff4a3a; --av-wait-fg: #fff; --av-note: #ffd2cc; --av-stall: #ffb020; --av-busy: #43e07a; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--av-fg); font: var(--av-font); }
   #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
   #labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
-  .label { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; font-size: 12px;
-    padding: 1px 7px; border-radius: 999px; background: rgba(10, 14, 20, 0.72); border: 1px solid var(--line); }
-  .label.airport { font-size: 13px; font-weight: 600; background: rgba(30, 40, 55, 0.85); }
-  .label.airport.alert { border-color: var(--red); }
-  .label.wait { background: var(--red); color: #fff; font-weight: 700; border-color: #fff; animation: pulse 1s infinite alternate; }
-  .label.off { opacity: 0.55; }
-  .label.follower { font-size: 11px; }
-  .label.sel { border-color: #fff; box-shadow: 0 0 0 1px #fff; }
-  @keyframes pulse { from { box-shadow: 0 0 0 0 rgba(255, 74, 58, 0.9); } to { box-shadow: 0 0 0 6px rgba(255, 74, 58, 0); } }
-  #top { position: fixed; top: max(10px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
-    display: flex; gap: 8px; align-items: center; z-index: 3; max-width: calc(100vw - 24px); }
-  #holding { border: 0; border-radius: 999px; padding: 7px 14px; font: inherit; font-weight: 700; cursor: pointer; white-space: nowrap; }
-  #holding.alert { background: var(--red); color: #fff; animation: pulse 0.8s infinite alternate; }
-  #holding.clear { background: rgba(20, 60, 35, 0.9); color: #bff5cf; cursor: default; }
-  #counts { background: var(--panel); border-radius: 999px; padding: 6px 12px; white-space: nowrap; font-size: 13px; }
-  #demo { background: #4b3a00; color: #ffe08a; border-radius: 999px; padding: 4px 10px; font-size: 12px; }
-  #help { position: fixed; right: max(12px, env(safe-area-inset-right)); top: max(10px, env(safe-area-inset-top)); z-index: 3;
-    width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: inherit; font-weight: 700; cursor: pointer; }
-  #legend { position: fixed; right: max(12px, env(safe-area-inset-right)); top: 54px; z-index: 3; background: var(--panel);
-    border-radius: 12px; padding: 10px 14px; max-width: 290px; font-size: 13px; border: 1px solid var(--line); }
-  #legend ul { margin: 0; padding: 0; list-style: none; }
-  #legend li { padding: 2px 0; }
-  #panel { position: fixed; z-index: 4; background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
-    left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); width: 320px; max-height: 60vh; overflow: auto; padding: 12px 14px; }
-  #panel header { display: flex; align-items: center; gap: 8px; }
-  #p-icon { font-size: 24px; }
-  #p-name { font-weight: 700; font-size: 16px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #p-close { border: 0; background: none; color: var(--fg); font-size: 20px; cursor: pointer; padding: 4px 8px; }
-  .chip { display: inline-block; border-radius: 999px; padding: 2px 10px; margin: 6px 0 4px; font-weight: 600; font-size: 12px; background: #2a3442; }
-  .st-busy, .st-active { background: #17432a; color: #aef5c6; }
-  .st-waiting { background: var(--red); color: #fff; }
-  .st-idle, .st-resting { background: #2b3340; color: #cbd5e1; }
-  .st-offline, .st-dim { background: #222; color: #888; }
-  .st-stalled { background: var(--amber); color: #2a1a00; }
-  #p-action { font-size: 15px; margin: 4px 0 8px; }
-  dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0 0 6px; font-size: 13px; }
-  dt { color: #9aa7b6; } dd { margin: 0; overflow-wrap: anywhere; }
-  #p-fhead { font-size: 12px; color: #9aa7b6; margin-top: 6px; }
-  #p-followers { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
-  #p-followers button, #p-lead { border: 1px solid var(--line); background: #1b2430; color: var(--fg); border-radius: 8px; padding: 4px 8px; font: inherit; font-size: 12px; cursor: pointer; }
-  @media (max-width: 640px) {
-    #panel { left: 0; right: 0; bottom: 0; width: auto; border-radius: 16px 16px 0 0; max-height: 46vh;
-      padding-bottom: max(14px, env(safe-area-inset-bottom)); }
-    #panel::before { content: ""; display: block; width: 40px; height: 4px; border-radius: 2px; background: #556; margin: 0 auto 8px; }
-    #counts { display: none; }
-    #top { left: 12px; transform: none; }
-  }
+  .av-s-waiting { background: var(--av-wait); }
+  .av-label.lead { font-weight: 600; }
+  .av-label.sub { font-size: 11px; padding: 1px 7px 1px 5px; }
+  .av-label.place { font-size: 13px; font-weight: 600; background: rgba(30, 40, 55, 0.85); }
+  .av-label.place.alert { border-color: var(--av-wait); }
+  .av-label.waiting { background: var(--av-wait); color: var(--av-wait-fg); border-color: #fff; font-weight: 700;
+    animation: atc-pulse 1s infinite alternate; }
+  .av-label.offline { opacity: 0.55; }
+  .av-label.sel { border-color: #fff; box-shadow: 0 0 0 1px #fff; }
+  @keyframes atc-pulse { from { box-shadow: 0 0 0 0 rgba(255, 74, 58, 0.9); } to { box-shadow: 0 0 0 6px rgba(255, 74, 58, 0); } }
+  @media (prefers-reduced-motion: reduce) { .av-label.waiting { animation: none; } }
+  .av-legend ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 </style>
 </head>
 <body>
 <canvas id="view" tabindex="0" role="img" aria-label="Claude Code sessions as aircraft round a control tower"></canvas>
 <div id="labels" aria-hidden="true"></div>
-<div id="top">
-  <button id="holding" type="button" class="clear" aria-live="polite">…</button>
-  <span id="counts"></span>
-  <span id="demo" hidden>demo feed</span>
-</div>
-<button id="help" type="button" aria-label="Legend">?</button>
-<div id="legend" hidden>
+<aside id="legend" hidden aria-label="What you are looking at">
   <ul>
     <li>🗼 Tower = you; red lamps = aircraft holding</li>
-    <li>🛬 Holding stack = waiting on you (higher = longer)</li>
+    <li>🛬 Holding stack = waiting on you (higher = longer); "?" = a question, padlock = a permission prompt</li>
     <li>✈️ At the gate = a session; fin colour = its family</li>
-    <li>🛩️ Small aircraft = its subagents (flying = active)</li>
+    <li>🛩️ Small aircraft = its subagents (flying = active, parked = resting)</li>
     <li>📦 cargo belt = edit · 🔥 exhaust = run</li>
     <li>📡 green radar = read · 📻 radio rings = web</li>
     <li>🛫 green chase lights = delegate · ⏸️ hold bar = think</li>
     <li>✳️ violet beacon = other · ⚠️ amber flashing = stalled</li>
-    <li>🅿️ dark = idle · 🏚️ by the hangar, grey = offline</li>
+    <li>💬 cyan ring and landing light = a new tool call</li>
+    <li>🏢 taller terminal = more tool calls at that repo</li>
+    <li>🅿️ dark = idle · grey by the hangar = offline</li>
   </ul>
-</div>
-<section id="panel" hidden aria-live="polite">
-  <header><span id="p-icon"></span><span id="p-name"></span><button id="p-close" type="button" aria-label="Close">×</button></header>
-  <span id="p-state" class="chip"></span>
-  <div id="p-action"></div>
-  <dl id="p-rows"></dl>
-  <button id="p-lead" type="button" hidden>↩ lead aircraft</button>
-  <div id="p-fhead" hidden></div>
-  <ul id="p-followers"></ul>
-</section>
+</aside>
 <script src="strata-loader.js"></script>
 <script src="strata-kit.js"></script>
-<script src="atc.js"></script>
+<script src="agentviz-feed.js"></script>
+<script src="agentviz-screen.js"></script>
+<script src="agentviz-hud.js"></script>
+<script src="agentviz-wire.js"></script>
+<script src="atc-field.js"></script>
+<script src="atc-frame.js"></script>
+<script src="page.js"></script>
 </body>
 </html>
