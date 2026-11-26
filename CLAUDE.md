@@ -20,5 +20,3 @@ agentviz family: https://github.com/dmccoystephenson/agentviz
   requirements-dev.txt for the GIF). The unit tests use port 9108 (`ATC_UNIT_PORT` overrides), the
   browser tests 9109 (`ATC_TEST_PORT`).
 - Screenshots come from the FIXTURE feed only, never live sessions.
-- While the repo is private, hosted Actions are billing-blocked: run localci on PRs
-  (drop this line once it is public).
