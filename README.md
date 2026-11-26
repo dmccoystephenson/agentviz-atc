@@ -42,7 +42,11 @@ Tap an aircraft to open its panel (a bottom sheet on a phone; swipe it down or
 tap the cross to close). The red **need you** chip names who is waiting and
 why (a question, or a permission prompt), flies the camera to them and cycles
 through them; the house button shows the whole field again; `?` opens the
-legend. If the feed stops answering, a banner says so and the last snapshot
+legend. The top bar stays on one line however narrow the window: the count
+words, then the chip's "who" go first, and on a phone the idle and away counts
+(the field shows those aircraft). On a phone a tapped aircraft glides into the
+clear band above the sheet, and world labels never sit under the bar or the
+sheet. If the feed stops answering, a banner says so and the last snapshot
 stays; with no sessions at all, a hint says how to start.
 
 ## What you're seeing
@@ -53,7 +57,7 @@ stays; with no sessions at all, a hint says how to start.
 | Red lamps round the tower cab, flashing red mast beacon, `N HOLDING` | how many sessions are waiting on you; a green beacon means `ALL CLEAR` | sessions with `state: waiting` |
 | 🛬 Aircraft circling the tower with a pulsing red beacon | **waiting**: blocked on you. The longer it has waited, the higher it sits in the stack and the faster it pulses. A dashed red line runs back to its gate, where a red ring pulses | `state: waiting`, `statusAgeSec` |
 | A yellow "?" over the beacon / a padlock over it | waiting on a question / on a permission prompt; its label says which | `waitingReason` |
-| Airport (round terminal, apron, runway, hangar) | a place (a repo, by directory name); its beacon flashes red while one of its aircraft is holding | `places[]` |
+| Airport (round terminal, apron, runway with approach lights and their running flash, hangar) | a place (a repo, by directory name); its beacon flashes red while one of its aircraft is holding | `places[]` |
 | A taller terminal | more tool calls seen at that repo | `places[].toolCount` |
 | ✈️ Large aircraft at a gate, nav lights and strobe on | a session that is working | `state: busy` |
 | Fin and livery colour | the session's family: its subagents carry the same colour | `seed` |
@@ -61,7 +65,7 @@ stays; with no sessions at all, a hint says how to start.
 | 🅿️ Small aircraft parked in a row behind its lead | a resting subagent (landed) | `followers[].state: resting` |
 | Darker aircraft at a gate, lights off | idle | `state: idle` |
 | Small grey aircraft by the hangar | offline | `state: offline` |
-| Three flashing amber lights and an amber ring | stalled: a session busy with nothing written for 5 minutes, or a subagent quiet that long without finishing | `stalled`, `followers[].stalled` |
+| Three flashing amber lights and an amber ring | stalled: a session busy with nothing written for 5 minutes, or a subagent quiet that long without finishing (a stalled subagent is always labelled) | `stalled`, `followers[].stalled` |
 | A cyan ring going out and the landing light flashing | a new tool call, just now | `lastToolAt`, `followers[].toolCount` |
 | 📦 Belt loader carrying crates into the hold (a slung crate in flight) | **edit** | `action: edit` |
 | 🔥 Exhaust streaming from both engines | **run** | `action: run` |
@@ -87,7 +91,7 @@ stays; with no sessions at all, a hint says how to start.
 | | |
 |---|---|
 | ![The selected-agent panel open on the desktop, listing the session's state, action, branch and its subagents](docs/media/panel-desktop.png) | ![A phone in portrait: the field with the bottom sheet open on the waiting session](docs/media/phone.png) |
-| *The panel for a selected aircraft: state, what it is doing now, tool, branch, airport, how long in this state, and each subagent as a chip you can tap to fly the camera to it. A subagent's own panel shows its own branch.* | *Phone (390x844, DPR 3): the bottom sheet open on Thistle, which needs permission.* |
+| *The panel for a selected aircraft: state, what it is doing now, tool, branch, airport, how long in this state, and each subagent as a chip you can tap to fly the camera to it. A subagent's own panel shows its own branch.* | *Phone (390x844, DPR 3): the bottom sheet open on Thistle, which needs permission. The top bar keeps to one line.* |
 | ![The field from a low angle, with the tower and holding stack against the sky](docs/media/angle-low.png) | ![The field from straight above: the tower, ring road and seven airports](docs/media/angle-top.png) |
 | *From a low angle: the tower and its holding stack against the sky.* | *From straight above: the ring of airports, the service roads and the flight loops.* |
 

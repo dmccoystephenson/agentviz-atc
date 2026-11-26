@@ -4,7 +4,7 @@
 (function () {
   "use strict";
   const REASON = {question: "has a question", permission: "needs permission"};
-  const DEFAULT_YAW = 2.2, DEFAULT_PITCH = 0.72;
+  const DEFAULT_YAW = 2.2, DEFAULT_PITCH = 0.72, PORTRAIT_PITCH = 0.98;
   const canvas = document.getElementById("view");
   const field = new window.AtcField();
   const wire = AgentvizWire.create();
@@ -23,24 +23,46 @@
   /* ------------------------------------------------------------ camera */
   // The whole field, whatever the window's shape. The target sits a little
   // towards the camera: perspective makes the near edge of the ring the widest.
+  // On a portrait screen the camera looks down more steeply, so the ring
+  // fills more of the tall view and its labels spread out.
   function fitView() {
     const aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight);
-    const toward = field.extent * 0.16;
-    return {yaw: DEFAULT_YAW, pitch: DEFAULT_PITCH, ty: 3,
+    const pitch = aspect < 1 ? PORTRAIT_PITCH : DEFAULT_PITCH;
+    const toward = field.extent * (aspect < 1 ? 0.08 : 0.16);
+    return {yaw: DEFAULT_YAW, pitch, ty: 3,
       tx: Math.cos(DEFAULT_YAW) * toward, tz: Math.sin(DEFAULT_YAW) * toward,
       dist: Math.min(220, field.extent * 1.45 * Math.max(1, 1.5 / aspect))};
   }
   function fit() { follow = null; if (kit) Object.assign(kit.cam, fitView()); }
 
-  // Glide the camera after an aircraft until it is centred (it may be moving).
+  // The bottom sheet (a phone) covers the lower half of the field: there the
+  // selected aircraft is framed in the clear band between the top bar and
+  // the sheet instead of in the middle of the canvas.
+  function sheetOpen() { return hud.panel && !hud.panel.hidden && hud.panel.getBoundingClientRect().left < 2; }
+
+  // How far (world units, along the ground towards the camera) to set the
+  // camera's target from a point so that the point sits in the clear band.
+  function clearBandShift(p) {
+    if (!sheetOpen()) return 0;
+    const bar = document.querySelector(".av-bar"), r = canvas.getBoundingClientRect();
+    const top = bar ? bar.getBoundingClientRect().bottom : 0;
+    const want = (top + hud.panel.getBoundingClientRect().top) / 2 - r.top;
+    const fx = -Math.cos(kit.cam.yaw), fz = -Math.sin(kit.cam.yaw);  // screen-up on the ground
+    const q0 = kit.project(p.x, p.y, p.z), q1 = kit.project(p.x + fx, p.y, p.z + fz);
+    const perUnit = q0 && q1 ? q0.y - q1.y : 0;
+    return perUnit > 1 ? (canvas.clientHeight / 2 - want) / perUnit : 0;
+  }
+
+  // Glide the camera after an aircraft until it is framed (it may be moving).
   function stepFollow(dt) {
     if (!follow) return;
     const a = field.agents.get(follow);
     if (!a) { follow = null; return; }
-    const k = 1 - Math.exp(-3 * dt), cam = kit.cam;
-    cam.tx += (a.disp.x - cam.tx) * k; cam.ty += (a.disp.y - cam.ty) * k; cam.tz += (a.disp.z - cam.tz) * k;
+    const k = 1 - Math.exp(-3 * dt), cam = kit.cam, shift = clearBandShift(a.disp);
+    const gx = a.disp.x + Math.cos(cam.yaw) * shift, gz = a.disp.z + Math.sin(cam.yaw) * shift;
+    cam.tx += (gx - cam.tx) * k; cam.ty += (a.disp.y - cam.ty) * k; cam.tz += (gz - cam.tz) * k;
     cam.dist += (Math.max(22, Math.min(cam.dist, 40)) - cam.dist) * k;
-    if (Math.hypot(a.disp.x - cam.tx, a.disp.z - cam.tz) < 0.3) follow = null;
+    if (Math.hypot(gx - cam.tx, gz - cam.tz) < 0.3 && Math.abs(cam.dist - Math.max(22, Math.min(cam.dist, 40))) < 0.5) follow = null;
   }
 
   /* ------------------------------------------------------------ labels */
@@ -53,10 +75,11 @@
     return {el, rank: selected || waiting ? 0 : 2, tries: 3};  // a lead may step up over a crowded gate
   }
 
-  // Subagents are labelled only while they or their lead are selected.
+  // Subagents are labelled while they or their lead are selected, and a
+  // stalled one always (it may need a look).
   function followerLabel(a) {
     const f = a.data, selected = a.id === selectedId;
-    if (!selected && a.leadAgent.id !== selectedId) return null;
+    if (!selected && a.leadAgent.id !== selectedId && !f.stalled) return null;
     const el = labels.set("a:" + a.id, {cls: "sub" + (selected ? " sel" : ""), state: f.stalled ? "stalled" : null,
       action: f.state === "active" ? f.action : "none", text: f.label || f.id});
     return {el, rank: selected ? 0 : f.state === "active" ? 3 : 2};
@@ -82,7 +105,30 @@
       items.push(item);
     }
     labels.end();
+    keepClearOfHud(items);
     StrataKit.placeLabels(items);
+  }
+
+  // No world label under the top bar, the panel or the legend. A label that
+  // must stay (rank 0: holding or selected) drops just below the bar instead.
+  function keepClearOfHud(items) {
+    const r = canvas.getBoundingClientRect(), boxes = [];
+    for (const sel of [".av-panel", ".av-legend"]) {
+      const node = document.querySelector(sel);
+      if (node && !node.hidden) boxes.push(node.getBoundingClientRect());
+    }
+    const bar = document.querySelector(".av-bar");
+    const barBottom = bar ? bar.getBoundingClientRect().bottom - r.top + 4 : 0;
+    for (const it of items) {
+      if (!it.q) continue;
+      const h = it.el._skH || 20, x = it.q.x + r.left, y = it.q.y + r.top;
+      if (boxes.some((b) => x > b.left && x < b.right && y > b.top && y - h < b.bottom)) {
+        if (it.rank > 0) it.q = null;
+      } else if (it.q.y - h < barBottom) {
+        if (it.rank > 0) it.q = null;
+        else it.q = Object.assign({}, it.q, {y: barBottom + h});
+      }
+    }
   }
 
   /* ------------------------------------------------------------ picking + selection */
@@ -102,7 +148,8 @@
     selectedId = idOf(target);
     const a = selectedId && field.agents.get(selectedId);
     if (kit) kit.selected = a || null;
-    if (a && (how === "list" || how === "waiting")) follow = a.id;
+    // A tap on a phone glides the aircraft clear of the sheet that just opened.
+    if (a && (how === "list" || how === "waiting" || (how === "tap" && sheetOpen()))) follow = a.id;
   }
 
   // ATC's own rows under the kit's: how long in this state, where it sits.
