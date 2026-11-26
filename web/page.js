@@ -38,19 +38,10 @@
   // The bottom sheet (a phone) covers the lower half of the field: there the
   // selected aircraft is framed in the clear band between the top bar and
   // the sheet instead of in the middle of the canvas.
-  function sheetOpen() { return hud.panel && !hud.panel.hidden && hud.panel.getBoundingClientRect().left < 2; }
-
-  // How far (world units, along the ground towards the camera) to set the
-  // camera's target from a point so that the point sits in the clear band.
-  function clearBandShift(p) {
-    if (!sheetOpen()) return 0;
-    const bar = document.querySelector(".av-bar"), r = canvas.getBoundingClientRect();
-    const top = bar ? bar.getBoundingClientRect().bottom : 0;
-    const want = (top + hud.panel.getBoundingClientRect().top) / 2 - r.top;
-    const fx = -Math.cos(kit.cam.yaw), fz = -Math.sin(kit.cam.yaw);  // screen-up on the ground
-    const q0 = kit.project(p.x, p.y, p.z), q1 = kit.project(p.x + fx, p.y, p.z + fz);
-    const perUnit = q0 && q1 ? q0.y - q1.y : 0;
-    return perUnit > 1 ? (canvas.clientHeight / 2 - want) / perUnit : 0;
+  function sheetOpen() { const p = hud.panelRect(); return !!p && p.sheet; }
+  function followTarget(p) {
+    if (!sheetOpen()) return {tx: p.x, tz: p.z};
+    return AgentvizScreen.reveal(kit.cam, p, hud.freeRect(canvas), {force: true, dy: 0});
   }
 
   // Glide the camera after an aircraft until it is framed (it may be moving).
@@ -58,8 +49,7 @@
     if (!follow) return;
     const a = field.agents.get(follow);
     if (!a) { follow = null; return; }
-    const k = 1 - Math.exp(-3 * dt), cam = kit.cam, shift = clearBandShift(a.disp);
-    const gx = a.disp.x + Math.cos(cam.yaw) * shift, gz = a.disp.z + Math.sin(cam.yaw) * shift;
+    const k = 1 - Math.exp(-3 * dt), cam = kit.cam, goal = followTarget(a.disp), gx = goal.tx, gz = goal.tz;
     cam.tx += (gx - cam.tx) * k; cam.ty += (a.disp.y - cam.ty) * k; cam.tz += (gz - cam.tz) * k;
     cam.dist += (Math.max(22, Math.min(cam.dist, 40)) - cam.dist) * k;
     if (Math.hypot(gx - cam.tx, gz - cam.tz) < 0.3 && Math.abs(cam.dist - Math.max(22, Math.min(cam.dist, 40))) < 0.5) follow = null;
@@ -105,30 +95,9 @@
       items.push(item);
     }
     labels.end();
-    keepClearOfHud(items);
-    StrataKit.placeLabels(items);
-  }
-
-  // No world label under the top bar, the panel or the legend. A label that
-  // must stay (rank 0: holding or selected) drops just below the bar instead.
-  function keepClearOfHud(items) {
-    const r = canvas.getBoundingClientRect(), boxes = [];
-    for (const sel of [".av-panel", ".av-legend"]) {
-      const node = document.querySelector(sel);
-      if (node && !node.hidden) boxes.push(node.getBoundingClientRect());
-    }
-    const bar = document.querySelector(".av-bar");
-    const barBottom = bar ? bar.getBoundingClientRect().bottom - r.top + 4 : 0;
-    for (const it of items) {
-      if (!it.q) continue;
-      const h = it.el._skH || 20, x = it.q.x + r.left, y = it.q.y + r.top;
-      if (boxes.some((b) => x > b.left && x < b.right && y > b.top && y - h < b.bottom)) {
-        if (it.rank > 0) it.q = null;
-      } else if (it.q.y - h < barBottom) {
-        if (it.rank > 0) it.q = null;
-        else it.q = Object.assign({}, it.q, {y: barBottom + h});
-      }
-    }
+    // No world label under the top bar, the panel or the legend. A label that
+    // must stay (rank 0: holding or selected) drops just below the bar instead.
+    hud.placeLabels(items, {canvas});
   }
 
   /* ------------------------------------------------------------ picking + selection */
@@ -166,6 +135,7 @@
     buttons: [{icon: "home", label: "Show the whole field", onClick: fit}],
     onSelect,
     rows: panelRows,
+    oneRow: true,
   });
 
   function accept(doc) {
