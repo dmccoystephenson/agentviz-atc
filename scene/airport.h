@@ -1,7 +1,8 @@
 // airport.h: one airport per place, from its zone record (atc-frame.js):
 // a round terminal in the place's colour (taller the more tool calls were
 // seen there), its beacon (flashing red while one of its aircraft holds),
-// a hangar for offline aircraft, and runway edge and threshold lights.
+// a hangar for offline aircraft, runway edge and threshold lights, and
+// approach lights with a running flash.
 #pragma once
 
 #include <vector>
@@ -83,10 +84,27 @@ inline void drawRunwayLights(const Airport& ap) {
         }
 }
 
+// Approach lights on the centreline past the green threshold, with a
+// sequenced flash (the "rabbit") running in towards the runway and a pause.
+inline void drawApproachLights(const Airport& ap, double t) {
+    constexpr int kLights = 6;
+    const float half = ap.runwayHalf();
+    const int lit = H().reducedMotion
+        ? -1
+        : kLights - 1 - static_cast<int>(fract(static_cast<float>(t) * 1.2f + ap.hue) * (kLights + 2));
+    float x, z;
+    for (int k = 0; k < kLights; ++k) {
+        ap.at(7.3f, -(half + 1.6f + k * 1.2f), x, z);
+        dot(x, 0.1f, z, 3.0f, 0.12f, {0.9f, 0.92f, 1.0f}, 0.55f);
+        if (k == lit) glow(x, 0.2f, z, 1.2f, kWhite, 0.95f);
+    }
+}
+
 inline void drawAirport(const Airport& ap, double t) {
     drawTerminal(ap, t);
     drawHangar(ap);
     drawRunwayLights(ap);
+    drawApproachLights(ap, t);
 }
 
 }  // namespace atc

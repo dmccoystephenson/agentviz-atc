@@ -25,6 +25,35 @@
   @keyframes atc-pulse { from { box-shadow: 0 0 0 0 rgba(255, 74, 58, 0.9); } to { box-shadow: 0 0 0 6px rgba(255, 74, 58, 0); } }
   @media (prefers-reduced-motion: reduce) { .av-label.waiting { animation: none; } }
   .av-legend ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+  /* --av-note themes both the waiting dot and the demo badge in the kit. Here the dot is red on the
+     field (labels, panel) but pale inside the red "need you" chip, where red would vanish; the demo
+     badge is a quiet dashed tag, so it never reads as something waiting. */
+  .av-wait .av-dot, .av-needs .av-dot { background: var(--av-note); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); }
+  .av-badge { color: var(--av-muted); border: 1px dashed rgba(154, 167, 182, 0.55); background: rgba(14, 20, 28, 0.6); }
+  /* Compact top bar: always one line, in steps as the window narrows. First the count words go (each
+     chip keeps its title), then the "who" on the need-you chip (the chip still cycles to each one and
+     the panel says why) and the title shortens to ATC; on a phone the title, the idle and away counts
+     (the field shows those aircraft) and, below 380px, the demo tag go. */
+  @media (max-width: 1100px) {
+    .av-bar { flex-wrap: nowrap; }
+    .av-bar .av-chip { flex: none; }
+    .av-bar .av-wide { display: none; }
+  }
+  @media (max-width: 900px) {
+    .av-bar { gap: 4px; }
+    .av-bar .av-chip { font-size: 12px; padding: 4px 8px; gap: 4px; }
+    .av-bar .av-wait-who { display: none; }
+    .av-title { font-size: 0 !important; }
+    .av-title::after { content: "ATC"; font-size: 12px; }
+  }
+  @media (max-width: 520px) {
+    .av-bar .av-chip { padding: 4px 6px; }
+    .av-bar .av-title, .av-bar > .av-chip:has(> .av-s-idle), .av-bar > .av-chip:has(> .av-s-offline) { display: none; }
+    .av-bar button.av-chip { min-width: 40px; justify-content: center; }
+    .av-badge { font-size: 0 !important; }
+    .av-badge::after { content: "demo"; font-size: 12px; }
+  }
+  @media (max-width: 379px) { .av-bar .av-badge { display: none; } }
 </style>
 </head>
 <body>
